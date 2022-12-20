@@ -98,7 +98,7 @@ fi
 
 scriptVersion="1.5.1"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin/
-scriptLog="${4:-"/var/tmp/org.lululemon.log"}"
+scriptLog="${4:-"/var/tmp/xyz.techitout.log"}"
 debugMode="${5:-"true"}"                           # [ true (default) | false ]
 welcomeDialog="${6:-"true"}"                       # [ true (default) | false ]
 completionActionOption="${7:-"Restart Attended"}"  # [ wait | sleep (with seconds) | Shut Down | Shut Down Attended | Shut Down Confirm | Restart | Restart Attended (default) | Restart Confirm | Log Out | Log Out Attended | Log Out Confirm ]
@@ -314,7 +314,7 @@ policy_array=('
 		{
 			"listitem": "Jamf Connect",
 			"icon": "62e55de92ee6927f9a8a9f63afbcdc658c8f160e4a6b79e7573c3fff04d47d27",
-			"progresstext": "Authentication tool to connect your Mac account to your Lululemon account",
+			"progresstext": "Authentication tool to connect your Mac account to your TechItOut account",
 			"trigger_list": [
 				{
 					"trigger": "jamfConnect",
@@ -334,13 +334,13 @@ policy_array=('
 			]
 		},
         {
-			"listitem": "Lululemon Image Assets",
+			"listitem": "TechItOut Image Assets",
 			"icon": "e7fc0055e38be3e396ee19899da4621eef3b247ab2dd8b2152fd9dde31583339",
-			"progresstext": "A repository of Lululemon image assets for your computer.",
+			"progresstext": "A repository of TechItOut image assets for your computer.",
 			"trigger_list": [
 				{
-					"trigger": "lululemonAssets",
-					"path": "/Library/Lululemon/Lululemon_logo_512.png"
+					"trigger": "TechItOutAssets",
+					"path": "/Library/TechItOut/TechItOut_logo_512.png"
 				}
 			]
 		},

@@ -7,7 +7,7 @@ targetLocation=$2
 targetVolume=$3
 
 # Optionally replace the value of this variable with the name of your organization.
-organizationIdentifier=com.lululemon
+organizationIdentifier=xyz.techitout
 waitMessage="Please wait a moment while your Mac completes enrolling with your organization's mobile device management solution."
 #
 # After Setup Assistant exits, if jamf enrollment isn't complete,
@@ -41,14 +41,14 @@ enrollmentTimeout=120
 #
 # One approach is to use the following locations and files:
 # LaunchDaemon: 
-#	/Library/LaunchDaemons/com.lululemon.swiftDialog-prestarter.plist
+#	/Library/LaunchDaemons/xyz.techitout.swiftDialog-prestarter.plist
 #
 # Temporary folder for the installer and scripts:
 #	/usr/local/swiftDialogEnrollment/
 #	
 # Scripts:
-#	/usr/local/swiftDialogEnrollment/com.lululemon.swiftDialog-prestarter-installer.zsh
-#	/usr/local/swiftDialogEnrollment/com.lululemon.swiftDialog-prestarter-uninstaller.zsh
+#	/usr/local/swiftDialogEnrollment/xyz.techitout.swiftDialog-prestarter-installer.zsh
+#	/usr/local/swiftDialogEnrollment/xyz.techitout.swiftDialog-prestarter-uninstaller.zsh
 #
 # The HEREDOC portions of this script that creates additional scripts
 # uses the backslash character (\) to prevent commands from being run and

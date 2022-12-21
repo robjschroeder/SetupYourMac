@@ -61,7 +61,7 @@ enrollmentTimeout=120
 # The resulting Script and LaunchDaemon will be run as root.
 #
 # Update this any of these are changed; 
-# The earlier package installer name was swiftDialogInstallerName=DEPNotify-1.1.4.pkg
+# The earlier package installer name was swiftDialogInstallerName=dialog-2.0.1-3814.pkg
 swiftDialogInstallerName=dialog-2.0.1-3814.pkg
 swiftDialogLog="/var/tmp/swiftDialog.log"
 swiftDialogAppPath="/usr/local/bin/dialog"
@@ -136,7 +136,7 @@ fi
 
 # At this point, a user is logged in, but enrollment isn't complete.
 # Display a message that they need to wait, but don't display it forever.
-# Set up a temporary message for DEPNotify to use
+# Set up a temporary message for swiftDialog to use
 #
 echo "Command: MainTitle: Please Wait" >> ${swiftDialogLog}
 echo "Command: MainText: ${waitMessage}" >> ${swiftDialogLog}
@@ -146,7 +146,6 @@ echo "Status: Waiting to complete enrollment" >> ${swiftDialogLog}
 # we are logged in as a real user instead of _mbsetutp user.
 #
 currentUser=\$( /usr/bin/stat -f %Su /dev/console )
-# sudo -u \${currentUser} open -a ${swiftDialogAppPath} ${depNotifyAppFullScreen}
 
 timeoutCounter=0
 until [[ -f /var/log/jamf.log ]]

@@ -1,4 +1,10 @@
 #!/bin/zsh
+
+# Version 1.1 
+# Post Install script for a PreStage Enrollment Package
+# For use with swiftDialog and Set Up Your Mac script
+# Updated: 12.29.2022 @robjschroeder
+
 ## postinstall
 
 pathToScript=$0
@@ -8,8 +14,7 @@ targetVolume=$3
 
 # Optionally replace the value of this variable with the name of your organization.
 organizationIdentifier=xyz.techitout
-waitMessage="Please wait a moment while your Mac completes enrolling with your organization's mobile device management solution."
-#
+
 # After Setup Assistant exits, if jamf enrollment isn't complete,
 # this is how many seconds to wait complete before exiting with an error:
 enrollmentTimeout=120
@@ -18,7 +23,7 @@ enrollmentTimeout=120
 # A LaunchDaemon that starts a separate script to run a Jamf Pro policy command
 # A LaunchAgent that runs BigHonkingText soon as the first user logs in
 # A script to wait for Jamf Pro enrollment to complete 
-# - then triggers a Jamf Pro policy that triggers DEPNotify
+# - then triggers a Jamf Pro policy that triggers swiftDialog
 # A script that is designed to be called by a Jamf Pro policy 
 # - to unload the LaunchDaemon then remove the LaunchDaemon and script
 #
@@ -60,11 +65,8 @@ enrollmentTimeout=120
 # This script must be run as root or via Jamf Pro.
 # The resulting Script and LaunchDaemon will be run as root.
 #
-# Update this any of these are changed; 
-# The earlier package installer name was swiftDialogInstallerName=dialog-2.0.1-3814.pkg
+# Update this any of these are changed
 swiftDialogInstallerName=dialog-2.0.1-3814.pkg
-swiftDialogLog="/var/tmp/swiftDialog.log"
-swiftDialogAppPath="/usr/local/bin/dialog"
 
 # 
 # You can change this if you have a better location to use.
@@ -92,7 +94,7 @@ launchDaemonPath="/Library/LaunchDaemons"/${launchDaemonName}
 # Leave a full return at the end of the content before the last "ENDOFINSTALLERSCRIPT" line.
 echo "Creating ${installerScriptPath}."
 (
-cat <<ENDOFINSTALLERSCRIPT
+	cat <<ENDOFINSTALLERSCRIPT
 #!/bin/zsh
 
 # First and most simple test: if enrollment is complete, just run the policy.
@@ -102,14 +104,14 @@ if  [[ -f /var/log/jamf.log ]];
 then
 	if \$( /usr/bin/grep -q enrollmentComplete /var/log/jamf.log )
 	then
-		/usr/local/jamf/bin/jamf policy -event ${swiftDialogStarter_Trigger}
+		/usr/local/jamf/bin/jamf policy -event ${Trigger}
 		exit 0
 	fi
 fi
 
 # If enrollment isn't complete, and no one has logged in yet, we can wait around indefinitely.
 # /var/db/.AppleSetupDone is created after any of these events happen:
-# • The MDM solution creates a manaded MDM administrator account
+# • The MDM solution creates a managed MDM administrator account
 # • The user creates a computer account in Setup Assistant
 # That's not enough though, we should wait until they complete Setup Assistant.
 # After they make their last Setup Assistant choice,
@@ -129,7 +131,7 @@ if  [[ -f /var/log/jamf.log ]];
 then
 	if \$( /usr/bin/grep -q enrollmentComplete /var/log/jamf.log )
 	then
-		/usr/local/jamf/bin/jamf policy -event ${swiftDialogStarter_Trigger}
+		/usr/local/jamf/bin/jamf policy -event ${Trigger}
 		exit 0
 	fi
 fi
@@ -137,15 +139,8 @@ fi
 # At this point, a user is logged in, but enrollment isn't complete.
 # Display a message that they need to wait, but don't display it forever.
 # Set up a temporary message for swiftDialog to use
-#
-echo "Command: MainTitle: Please Wait" >> ${swiftDialogLog}
-echo "Command: MainText: ${waitMessage}" >> ${swiftDialogLog}
-echo "Status: Waiting to complete enrollment" >> ${swiftDialogLog}
-
 # Assume that because we waited for /var/db/.AppleDiagnosticsSetupDone to exist,
 # we are logged in as a real user instead of _mbsetutp user.
-#
-currentUser=\$( /usr/bin/stat -f %Su /dev/console )
 
 timeoutCounter=0
 until [[ -f /var/log/jamf.log ]]
@@ -153,7 +148,6 @@ do
 	if [[ \$timeoutCounter -ge $enrollmentTimeout ]];
 	then
 		echo "Gave up waiting for the jamf log to appear."
-		killall DEPNotify
 		exit 1
 	else
 		echo "Waiting for the jamf log to appear. Timeout counter: \${timeoutCounter} of ${enrollmentTimeout}."
@@ -167,7 +161,6 @@ do
 	if [[ \$timeoutCounter -ge $enrollmentTimeout ]];
 	then
 		echo "Gave up waiting for enrollment to complete."
-		killall DEPNotify
 		exit 1
 	else
 		echo "Waiting for jamf enrollment to complete: Timeout counter: \${timeoutCounter} of ${enrollmentTimeout}."
@@ -179,17 +172,9 @@ done
 # At this point, we can assume:
 # 1. A real user is logged in
 # 2. jamf enrollment is complete
-# 3. DEPNotify is running with a generic wait message
-# 
 
-# Stop DEPNotify so the real DEPNotify can start
-# /usr/bin/killall DEPNotify
-
-# Remove the DEPNotify log otherwise DEPNotify will fail to open
-/bin/rm ${swiftDialogLog}
-
-# Run the policy to call the DEPNotify starter script.
-/usr/local/jamf/bin/jamf policy -event ${swiftDialogStarter_Trigger}
+# Run the policy to call the  swiftDialog setup your mac script.
+/usr/local/jamf/bin/jamf policy -event ${Trigger}
 
 ENDOFINSTALLERSCRIPT
 ) > "${installerScriptPath}"
@@ -203,7 +188,7 @@ chown root:wheel "${installerScriptPath}"
 # The following creates the LaunchDaemon file 
 # that starts the script 
 # that waits for Jamf Pro enrollment
-# then runs the jamf policy -event command to run your DEPNotify.sh script.
+# then runs the jamf policy -event command to run your Setup Your Mac.sh script.
 # Leave a full return at the end of the content before the last "ENDOFLAUNCHDAEMON" line.
 echo "Creating ${launchDaemonPath}."
 (
@@ -246,14 +231,14 @@ launchctl load "${launchDaemonPath}"
 # The following creates the script to uninstall the LaunchDaemon and installer script.
 # You can create a Jamf Pro policy with the following characteristics:
 # General settings:
-# --Name: Cleanup DEPNotify Installers
-# --Trigger: Custom Trigger: cleanup-depnotify-preinstaller
+# --Name: Cleanup swiftDialog Installers
+# --Trigger: Custom Trigger: cleanup-swiftDialog-preinstaller
 # --Scope: All Computers
 # --Frequency: Once per Computer
 # Files and Processes settings:
 # --Execute Command: Whatever your $uninstallerScriptPath is set to.
 #
-# In your DEPNotify.sh script, include the policy near the end of your POLICY_ARRAY.
+# In your Setup Your Mac.sh script, include the policy near the end of your POLICY_ARRAY.
 #
 # Leave a full return at the end of the content before the last "ENDOFUNINSTALLERSCRIPT" line.
 echo "Creating ${uninstallerScriptPath}."
@@ -261,12 +246,12 @@ echo "Creating ${uninstallerScriptPath}."
 cat <<ENDOFUNINSTALLERSCRIPT
 #!/bin/zsh
 # This is meant to be called by a Jamf Pro policy via trigger
-# Near the end of your POLICY_ARRAY in your DEPNotify.sh script
+# Near the end of your POLICY_ARRAY in your Setup Your Mac.sh script
 
 rm ${tempUtilitiesPath}/${swiftDialogInstallerName}
 rm ${installerScriptPath}
 
-# Note that if you unload the LaunchDaemon this will immediately kill the depNotify.sh script
+# Note that if you unload the LaunchDaemon this will immediately kill the Setup Your Mac.sh script
 # Just remove the underlying plist file, and the LaunchDaemon will not run after next reboot/login.
 
 rm ${launchDaemonPath}

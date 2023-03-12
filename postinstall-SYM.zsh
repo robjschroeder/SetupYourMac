@@ -9,7 +9,7 @@
 #
 # Created 01.16.2023 @robjschroeder
 # Updated 03.11.2023 @robjschroeder
-#
+
 ##################################################
 
 pathToScript=$0
@@ -36,14 +36,14 @@ enrollmentTimeout=120
 
 # One approach is to use the following locations and files:
 # LaunchDaemon: 
-#	/Library/LaunchDaemons/${organizationIdentifier}.swiftDialog-prestarter.plist
+#	/Library/LaunchDaemons/${organizationIdentifier}.sym-prestarter.plist
 
 # Temporary folder for the installer and scripts:
 #	/usr/local/SYM-enrollment
 
 # Scripts:
-#	${tempUtilitiesPath}/${organizationIdentifier}.swiftDialog-prestarter-installer.zsh
-#	${tempUtilitiesPath}/${organizationIdentifier}.swiftDialog-prestarter-uninstaller.zsh
+#	${tempUtilitiesPath}/${organizationIdentifier}.sym-prestarter-installer.zsh
+#	${tempUtilitiesPath}/${organizationIdentifier}.sym-prestarter-uninstaller.zsh
 
 # Create temp folder for scripts
 if [[ ! -d ${tempUtilitiesPath} ]]; then
@@ -134,7 +134,7 @@ fi
 updateScriptLog "Pre-flight Check: Complete"
 
 # Script and Launch Daemon/Agent variables
-installerBaseString=${organizationIdentifier}.swiftDialog-prestarter
+installerBaseString=${organizationIdentifier}.sym-prestarter
 installerScriptName=${installerBaseString}-installer.zsh
 installerScriptPath=${tempUtilitiesPath}/${installerScriptName}
 uninstallerScriptName=${installerBaseString}-uninstaller.zsh
@@ -243,7 +243,7 @@ chown root:wheel "${installerScriptPath}"
 # The following creates the LaunchDaemon file 
 # that starts the script 
 # that waits for Jamf Pro enrollment
-# then runs the jamf policy -event command to run your swiftDialog.sh script.
+# then runs the jamf policy -event command to run your Setup-Your-Mac-via-Dialog.bash script.
 # Leave a full return at the end of the content before the last "ENDOFLAUNCHDAEMON" line.
 updateScriptLog "Prestage SYM: Creating ${launchDaemonPath}."
 (
@@ -285,14 +285,14 @@ launchctl load "${launchDaemonPath}"
 # The following creates the script to uninstall the LaunchDaemon and installer script.
 # You can create a Jamf Pro policy with the following characteristics:
 # General settings:
-# --Name: Cleanup swiftDialog Installers
-# --Trigger: Custom Trigger: cleanup-swiftdialog-preinstaller
+# --Name: Cleanup SYM Installers
+# --Trigger: Custom Trigger: cleanup-sym-preinstaller
 # --Scope: All Computers
 # --Frequency: Once per Computer
 # Files and Processes settings:
 # --Execute Command: Whatever your $uninstallerScriptPath is set to.
 #
-# In your swiftDialog.sh script, include the policy near the end of your POLICY_ARRAY.
+# In your Setup-Your-Mac-via-Dialog.sh script, include the policy near the end of your policy array.
 #
 # Leave a full return at the end of the content before the last "ENDOFUNINSTALLERSCRIPT" line.
 updateScriptLog "Prestage SYM: Creating ${uninstallerScriptPath}."
@@ -300,7 +300,7 @@ updateScriptLog "Prestage SYM: Creating ${uninstallerScriptPath}."
 cat <<ENDOFUNINSTALLERSCRIPT
 #!/bin/zsh
 # This is meant to be called by a Jamf Pro policy via trigger
-# Near the end of your POLICY_JSON in your swiftDialog setup your mac script
+# Near the end of your JSON policy array in your swiftDialog setup your mac script
 
 rm ${tempUtilitiesPath}/${swiftDialogInstallerName}
 rm ${installerScriptPath}

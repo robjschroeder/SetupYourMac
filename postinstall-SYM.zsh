@@ -23,7 +23,7 @@ export PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin/
 osVersion=$( sw_vers -productVersion )
 osBuild=$( sw_vers -buildVersion )
 osMajorVersion=$( echo "${osVersion}" | awk -F '.' '{print $1}' )
-organizationIdentifier=com.lululemon
+organizationIdentifier=xyz.techitout
 tempUtilitiesPath="/usr/local/SYM-enrollment"
 scriptLog="${tempUtilitiesPath}/${organizationIdentifier}.postinstall.log"
 

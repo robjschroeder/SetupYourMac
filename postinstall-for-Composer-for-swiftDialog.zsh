@@ -1,93 +1,151 @@
 #!/bin/zsh
 ## postinstall
 
+# Postinstall script for Composer creates the following:
+# - A Launch Daemon that starts a separate script to run a Jamf Pro policy command
+# - A script to wait for Jamf Pro enrollment to complete then triggers Setup Your Mac
+# - A script that is designed to be called by a Jamf Pro policy to unload the Launch Daemon
+# -- and then remove the LaunchDaemon and script
+#
+# Created 01.16.2023 @robjschroeder
+# Updated 03.11.2023 @robjschroeder
+
+##################################################
+
 pathToScript=$0
 pathToPackage=$1
 targetLocation=$2
 targetVolume=$3
 
-# Optionally replace the value of this variable with the name of your organization.
-organizationIdentifier=TechItOut
+# Script Variables
+scriptVersion="1.1.0"
+export PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin/
+osVersion=$( sw_vers -productVersion )
+osBuild=$( sw_vers -buildVersion )
+osMajorVersion=$( echo "${osVersion}" | awk -F '.' '{print $1}' )
+organizationIdentifier=com.lululemon
+tempUtilitiesPath="/usr/local/SYM-enrollment"
+scriptLog="${tempUtilitiesPath}/${organizationIdentifier}.postinstall.log"
+
+# Jamf Pro Policy Trigger
+Trigger=swiftDialogStart
 
 # After Setup Assistant exits, if jamf enrollment isn't complete,
 # this is how many seconds to wait complete before exiting with an error:
 enrollmentTimeout=120
 
-# This postinstall script for Composer creates the following:
-# A LaunchDaemon that starts a separate script to run a Jamf Pro policy command
-# A LaunchAgent that runs BigHonkingText soon as the first user logs in
-# A script to wait for Jamf Pro enrollment to complete 
-# - then triggers a Jamf Pro policy that triggers swiftDialog
-# A script that is designed to be called by a Jamf Pro policy 
-# - to unload the LaunchDaemon then remove the LaunchDaemon and script
-#
-# Q: Why not just call the `jamf policy -event` command 
-#    from the PreStage Enrollment package postinstall script?
-# A: Because the PreStage Enrollment package is installed
-#    before the jamf binary is installed.
-#
-# Q: Why not just have the postinstall script wait until jamf enrollment is complete?
-# A: Because the postinstall script won't exit while it waits, which prevents enrollment
-#
-# Q: Why not just include the swiftDialog.sh script in the PreStage Enrollment package?
-# A: Because every time you update it, for instance POLICY_ARRAY, 
-#    you'd need to re-build and re-upload the package
-#
-# Q: Why not distribute the extra scripts and LaunchDaemons somewhere else,
-#    instead of embedding them in this funky postinstall script?
-# A: This way you only have to download and maintain one extra thing.
-# 
-#
 # One approach is to use the following locations and files:
 # LaunchDaemon: 
-#	/Library/LaunchDaemons/com.xxxx.swiftDialog-prestarter.plist
-#
-# Temporary folder for the installer and scripts:
-#	/usr/local/swiftDialog-with-installers/
-#	
-# Scripts:
-#	/usr/local/swiftDialog-with-installers/com.xxxx.swiftDialog-prestarter-installer.zsh
-#	/usr/local/swiftDialog-with-installers/com.xxxx.swiftDialog-prestarter-uninstaller.zsh
-#
-# The HEREDOC portions of this script that creates additional scripts
-# uses the backslash character (\) to prevent commands from being run and
-# to prevent variables from being interpreted.
-# NOTE: Make sure to leave a full return at the end of HEREDOC 
-# content before the last line that defines the end of the HEREDOC content.
+#	/Library/LaunchDaemons/${organizationIdentifier}.swiftDialog-prestarter.plist
 
-#
+# Temporary folder for the installer and scripts:
+#	/usr/local/SYM-enrollment
+
+# Scripts:
+#	${tempUtilitiesPath}/${organizationIdentifier}.swiftDialog-prestarter-installer.zsh
+#	${tempUtilitiesPath}/${organizationIdentifier}.swiftDialog-prestarter-uninstaller.zsh
+
+# Create temp folder for scripts
+if [[ ! -d ${tempUtilitiesPath} ]]; then
+	mkdir ${tempUtilitiesPath}
+fi
+
+# Client-side logging
+if [[ ! -f "${scriptLog}" ]]; then
+	touch "${scriptLog}"
+fi
+
+# Client-side Script Logging Function (Thanks @dan-snelson!!)
+function updateScriptLog() {
+	echo -e "$( date +%Y-%m-%d\ %H:%M:%S ) - ${1}" | tee -a "${scriptLog}"
+}
+
+updateScriptLog "\n###\n# Prestage Postinstall Script for SYM (${scriptVersion})\n# https://techitout.xyz/\n###\n"
+updateScriptLog "Pre-flight Check: Initiating ..."
+
 # This script must be run as root or via Jamf Pro.
 # The resulting Script and LaunchDaemon will be run as root.
-#
-# Update this any of these are changed; 
-swiftDialogInstallerName=swiftDialog.pkg
 
-# 
-# You can change this if you have a better location to use.
-# I haven't tested this with any path that has a space in the name.
-tempUtilitiesPath=/usr/local/swiftDialog-with-installers
-#
-# You can change any of these:
+if [[ $(id -u) -ne 0 ]]; then
+	updateScriptLog "Pre-flight Check: This script must be run as root; exiting."
+	exit 1
+fi
+
+# Check for / install swiftDialog (Thanks big bunches, @acodega!)
+
+function dialogCheck() {
+		
+	# Get the URL of the latest PKG From the Dialog GitHub repo
+	dialogURL=$(curl --silent --fail "https://api.github.com/repos/bartreardon/swiftDialog/releases/latest" | awk -F '"' "/browser_download_url/ && /pkg\"/ { print \$4; exit }")
+	
+	# Expected Team ID of the downloaded PKG
+	expectedDialogTeamID="PWA5E9TQ59"
+	
+	# Check for Dialog and install if not found
+	if [ ! -e "/Library/Application Support/Dialog/Dialog.app" ]; then
+		
+		updateScriptLog "Pre-flight Check: Dialog not found. Installing..."
+		
+		# Create temporary working directory
+		workDirectory=$( /usr/bin/basename "$0" )
+		tempDirectory=$( /usr/bin/mktemp -d "/private/tmp/$workDirectory.XXXXXX" )
+		
+		# Download the installer package
+		/usr/bin/curl --location --silent "$dialogURL" -o "$tempDirectory/Dialog.pkg"
+		
+		# Verify the download
+		teamID=$(/usr/sbin/spctl -a -vv -t install "$tempDirectory/Dialog.pkg" 2>&1 | awk '/origin=/ {print $NF }' | tr -d '()')
+		
+		# Install the package if Team ID validates
+		if [[ "$expectedDialogTeamID" == "$teamID" ]]; then
+			
+			/usr/sbin/installer -pkg "$tempDirectory/Dialog.pkg" -target /
+			sleep 2
+			dialogVersion=$( /usr/local/bin/dialog --version )
+			updateScriptLog "Pre-flight Check: swiftDialog version ${dialogVersion} installed; proceeding..."
+			
+		else
+			
+			# Display a so-called "simple" dialog if Team ID fails to validate
+			osascript -e 'display dialog "Please advise your Support Representative of the following error:\r\r• Dialog Team ID verification failed\r\r" with title "Setup Your Mac: Error" buttons {"Close"} with icon caution'
+			completionActionOption="Quit"
+			exitCode="1"
+			quitScript
+			
+		fi
+		
+		# Remove the temporary working directory when done
+		/bin/rm -Rf "$tempDirectory"
+		
+	else
+		
+		updateScriptLog "Pre-flight Check: swiftDialog version $(dialog --version) found; proceeding..."
+		
+	fi
+	
+}
+
+if [[ ! -e "/Library/Application Support/Dialog/Dialog.app" ]]; then
+	dialogCheck
+fi
+
+# Pre-flight Checks Complete
+
+updateScriptLog "Pre-flight Check: Complete"
+
+# Script and Launch Daemon/Agent variables
 installerBaseString=${organizationIdentifier}.swiftDialog-prestarter
 installerScriptName=${installerBaseString}-installer.zsh
 installerScriptPath=${tempUtilitiesPath}/${installerScriptName}
 uninstallerScriptName=${installerBaseString}-uninstaller.zsh
 uninstallerScriptPath=${tempUtilitiesPath}/${uninstallerScriptName}
-Trigger=swiftDialogStart
-
-
-# It's probably best to not update any of the rest of the script without extensive testing.
-#
 launchDaemonName=${installerBaseString}.plist
 launchDaemonPath="/Library/LaunchDaemons"/${launchDaemonName}
-#
-
-# Install the package
-/usr/sbin/installer -pkg ${tempUtilitiesPath}/${swiftDialogInstallerName} -target /
 
 # The following creates a script that triggers the swiftDialog setup your mac script to start. 
 # Leave a full return at the end of the content before the last "ENDOFINSTALLERSCRIPT" line.
-echo "Creating ${installerScriptPath}."
+updateScriptLog "Prestage SYM: Creating ${installerScriptPath}"
+
 (
 cat <<ENDOFINSTALLERSCRIPT
 #!/bin/zsh
@@ -174,7 +232,9 @@ done
 ENDOFINSTALLERSCRIPT
 ) > "${installerScriptPath}"
 
-echo "Setting permissions for ${installerScriptPath}."
+updateScriptLog "Prestage SYM: ${installerScriptPath} created."
+updateScriptLog "Setting permissions for ${installerScriptPath}."
+
 chmod 755 "${installerScriptPath}"
 chown root:wheel "${installerScriptPath}"
 
@@ -185,7 +245,7 @@ chown root:wheel "${installerScriptPath}"
 # that waits for Jamf Pro enrollment
 # then runs the jamf policy -event command to run your swiftDialog.sh script.
 # Leave a full return at the end of the content before the last "ENDOFLAUNCHDAEMON" line.
-echo "Creating ${launchDaemonPath}."
+updateScriptLog "Prestage SYM: Creating ${launchDaemonPath}."
 (
 cat <<ENDOFLAUNCHDAEMON
 <?xml version="1.0" encoding="UTF-8"?>
@@ -204,24 +264,23 @@ cat <<ENDOFLAUNCHDAEMON
 		<string>${installerScriptPath}</string>
 	</array>
 	<key>StandardErrorPath</key>
-	<string>/var/tmp/${installerScriptName}.err</string>
+	<string>/var/tmp/${installerScriptName}.err.log</string>
 	<key>StandardOutPath</key>
-	<string>/var/tmp/${installerScriptName}.out</string>
+	<string>/var/tmp/${installerScriptName}.out.log</string>
 </dict>
 </plist>
 
 ENDOFLAUNCHDAEMON
 )  > "${launchDaemonPath}"
 
-echo "Setting permissions for ${launchDaemonPath}."
+updateScriptLog "Prestage SYM: Setting permissions for ${launchDaemonPath}."
 chmod 644 "${launchDaemonPath}"
 chown root:wheel "${launchDaemonPath}"
 
-echo "Loading ${launchDaemonName}."
+updateScriptLog "Prestage SYM: Loading ${launchDaemonName}."
 launchctl load "${launchDaemonPath}"
 
 #-----------
-
 
 # The following creates the script to uninstall the LaunchDaemon and installer script.
 # You can create a Jamf Pro policy with the following characteristics:
@@ -236,7 +295,7 @@ launchctl load "${launchDaemonPath}"
 # In your swiftDialog.sh script, include the policy near the end of your POLICY_ARRAY.
 #
 # Leave a full return at the end of the content before the last "ENDOFUNINSTALLERSCRIPT" line.
-echo "Creating ${uninstallerScriptPath}."
+updateScriptLog "Prestage SYM: Creating ${uninstallerScriptPath}."
 (
 cat <<ENDOFUNINSTALLERSCRIPT
 #!/bin/zsh
@@ -252,15 +311,17 @@ rm ${installerScriptPath}
 rm ${launchDaemonPath}
 rm ${uninstallerScriptPath}
 rmdir ${tempUtilitiesPath}
-rm /var/tmp/${installerScriptName}.err
-rm /var/tmp/${installerScriptName}.out
+rm /var/tmp/${installerScriptName}.err.log
+rm /var/tmp/${installerScriptName}.out.log
 
 ENDOFUNINSTALLERSCRIPT
 ) > "${uninstallerScriptPath}"
 
-echo "Setting permissions for ${uninstallerScriptPath}."
+updateScriptLog "Prestage SYM: Setting permissions for ${uninstallerScriptPath}."
 chmod 777 "${uninstallerScriptPath}"
 chown root:wheel "${uninstallerScriptPath}"
+
+updateScriptLog "Prestage SYM: Complete."
 
 exit 0		## Success
 exit 1		## Failure

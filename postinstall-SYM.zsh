@@ -9,7 +9,7 @@
 #
 # Created 01.16.2023 @robjschroeder
 # Updated 03.11.2023 @robjschroeder
-
+#
 ##################################################
 
 pathToScript=$0

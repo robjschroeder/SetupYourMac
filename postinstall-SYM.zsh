@@ -28,7 +28,7 @@ tempUtilitiesPath="/usr/local/SYM-enrollment"
 scriptLog="${tempUtilitiesPath}/${organizationIdentifier}.postinstall.log"
 
 # Jamf Pro Policy Trigger
-Trigger=swiftDialogStart
+Trigger=symStart
 
 # After Setup Assistant exits, if jamf enrollment isn't complete,
 # this is how many seconds to wait complete before exiting with an error:

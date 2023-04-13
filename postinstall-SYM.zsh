@@ -10,7 +10,7 @@
 #
 # Created 01.16.2023 @robjschroeder
 # Updated 03.11.2023 @robjschroeder
-# Updated 04.12.2023 @dan-snelson
+# Updated 04.13.2023 @dan-snelson
 
 ##################################################
 
@@ -23,11 +23,11 @@ targetVolume=$3
 scriptVersion="1.2.0"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin/
 organizationIdentifier="com.company"
+scriptLog="/var/log/${organizationIdentifier}.log"
 osVersion=$( sw_vers -productVersion )
 osBuild=$( sw_vers -buildVersion )
 osMajorVersion=$( echo "${osVersion}" | awk -F '.' '{print $1}' )
 tempUtilitiesPath="/usr/local/SYM-enrollment"
-scriptLog="${tempUtilitiesPath}/${organizationIdentifier}.postinstall.log"
 
 # Jamf Pro Policy Trigger
 Trigger="symStart"
@@ -75,22 +75,36 @@ fi
 
 # Create Dialog directory
 if [[ ! -d "/Library/Application Support/Dialog/" ]]; then
-    updateScriptLog "Creating '/Library/Application Support/Dialog/' …"
+    updateScriptLog "PRE-FLIGHT CHECK: Creating '/Library/Application Support/Dialog/' …"
     mkdir -p "/Library/Application Support/Dialog/"
 else
     updateScriptLog "The directory '/Library/Application Support/Dialog/' exists …"
 fi
 
+# Wait for the creation of "${plistTestFile}"
+plistTestFile="/Library/Preferences/com.jamfsoftware.jamf.plist"
+plistTestFileCounter="1"
+secondsToWait="300"
+until [[ -f "${plistTestFile}" ]] || [[ "${plistTestFileCounter}" -gt "${secondsToWait}" ]] ; do
+    updateScriptLog "PRE-FLIGHT CHECK: Testing for '${plistTestFile}'; Counter: ${plistTestFileCounter} of ${secondsToWait}"
+    sleep 1
+    ((plistTestFileCounter++))
+done
+
 # Create Dialog.png from Self Service's custom icon (thanks, @meschwartz!)
-updateScriptLog "Create 'Dialog.png' …"
-xxd -p -s 260 "$(defaults read /Library/Preferences/com.jamfsoftware.jamf self_service_app_path)"/Icon$'\r'/..namedfork/rsrc | xxd -r -p > "/Library/Application Support/Dialog/Dialog.png"
+if [[ -f "${plistTestFile}" ]]; then
+	updateScriptLog "Create 'Dialog.png' …"
+	xxd -p -s 260 "$(defaults read /Library/Preferences/com.jamfsoftware.jamf self_service_app_path)"/Icon$'\r'/..namedfork/rsrc | xxd -r -p > "/Library/Application Support/Dialog/Dialog.png"
+else
+	updateScriptLog "The file '${plistTestFile}' was NOT found after waiting ${secondsToWait} seconds"
+fi
 
 # Validate Dialog Branding Image
-updateScriptLog "Validate 'Dialog.png' …"
+updateScriptLog "PRE-FLIGHT CHECK: Validate 'Dialog.png' …"
 if [[ ! -f "/Library/Application Support/Dialog/Dialog.png" ]]; then
-    updateScriptLog "Error: The file '/Library/Application Support/Dialog/Dialog.png' was NOT found."
+    updateScriptLog "PRE-FLIGHT CHECK: ERROR: The file '/Library/Application Support/Dialog/Dialog.png' was NOT found."
 else
-    updateScriptLog "The file '/Library/Application Support/Dialog/Dialog.png' was created sucessfully."
+    updateScriptLog "PRE-FLIGHT CHECK: The file '/Library/Application Support/Dialog/Dialog.png' was created sucessfully."
     find "/Library/Application Support/Dialog/Dialog.png" | tee -a "${scriptLog}"
 fi
 
@@ -252,7 +266,7 @@ ENDOFINSTALLERSCRIPT
 ) > "${installerScriptPath}"
 
 updateScriptLog "Prestage SYM: ${installerScriptPath} created."
-updateScriptLog "Setting permissions for ${installerScriptPath}."
+updateScriptLog "Prestage SYM: Setting permissions for ${installerScriptPath}."
 
 chmod 755 "${installerScriptPath}"
 chown root:wheel "${installerScriptPath}"

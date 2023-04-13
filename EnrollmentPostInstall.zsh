@@ -1,10 +1,11 @@
 #!/bin/zsh
 
-# Version 1.1 
+# Version 1.2.0
 # Post Install script for a PreStage Enrollment Package
-# For use with swiftDialog and Set Up Your Mac script
+# For use with swiftDialog (https://github.com/bartreardon/swiftDialog)
+# and Setup Your Mac (https://snelson.us/sym)
 # Updated: 12.29.2022 @robjschroeder
-#
+# Updated: 04.12.2023 @dan-snelson
 
 ## postinstall
 
@@ -20,9 +21,9 @@ organizationIdentifier=xyz.techitout
 # this is how many seconds to wait complete before exiting with an error:
 enrollmentTimeout=120
 
-# This postinstall script for Composer creates the following:
+# This postinstall script creates the following:
 # A LaunchDaemon that starts a separate script to run a Jamf Pro policy command
-# A LaunchAgent that runs BigHonkingText soon as the first user logs in
+# A LaunchAgent that runs Setup Your Mac soon as the first user logs in
 # A script to wait for Jamf Pro enrollment to complete 
 # - then triggers a Jamf Pro policy that triggers swiftDialog
 # A script that is designed to be called by a Jamf Pro policy 
@@ -36,8 +37,8 @@ enrollmentTimeout=120
 # Q: Why not just have the postinstall script wait until jamf enrollment is complete?
 # A: Because the postinstall script won't exit while it waits, which prevents enrollment
 #
-# Q: Why not just include the Setup-Your-Mac-via-Dialog script in the PreStage Enrollment package?
-# A: Because every time you update it, for instance POLICY_ARRAY, 
+# Q: Why not just include the Setup-Your-Mac-via-Dialog.bash script in the PreStage Enrollment package?
+# A: Because every time you update it, for instance policyJSON, 
 #    you'd need to re-build and re-upload the package
 #
 # Q: Why not distribute the extra scripts and LaunchDaemons somewhere else,
@@ -62,18 +63,16 @@ enrollmentTimeout=120
 # NOTE: Make sure to leave a full return at the end of HEREDOC 
 # content before the last line that defines the end of the HEREDOC content.
 
-#
 # This script must be run as root or via Jamf Pro.
 # The resulting Script and LaunchDaemon will be run as root.
 #
 # Update this any of these are changed
-swiftDialogInstallerName=dialog-2.0.1-3814.pkg
+swiftDialogInstallerName=dialog-2.1.0-4148.pkg
 
-# 
 # You can change this if you have a better location to use.
 # I haven't tested this with any path that has a space in the name.
 tempUtilitiesPath=/usr/local/swiftDialogEnrollment
-#
+
 # You can change any of these:
 installerBaseString=${organizationIdentifier}.swiftDialog-prestarter
 installerScriptName=${installerBaseString}-installer.zsh
@@ -83,10 +82,8 @@ uninstallerScriptPath=${tempUtilitiesPath}/${uninstallerScriptName}
 swiftDialogStarter_Trigger=start-swiftDialog
 
 # It's probably best to not update any of the rest of the script without extensive testing.
-#
 launchDaemonName=${installerBaseString}.plist
 launchDaemonPath="/Library/LaunchDaemons"/${launchDaemonName}
-#
 
 # Install the package
 /usr/sbin/installer -pkg ${tempUtilitiesPath}/${swiftDialogInstallerName} -target /

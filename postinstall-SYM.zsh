@@ -62,50 +62,15 @@ function updateScriptLog() {
 	echo -e "$( date +%Y-%m-%d\ %H:%M:%S ) - ${1}" | tee -a "${scriptLog}"
 }
 
+# Start Logging
 updateScriptLog "\n###\n# PreStage SYM (${scriptVersion})\n# https://techitout.xyz/\n###\n"
 updateScriptLog "PRE-FLIGHT CHECK: Initiating ..."
 
 # This script must be run as root or via Jamf Pro.
 # The resulting Script and LaunchDaemon will be run as root.
-
 if [[ $(id -u) -ne 0 ]]; then
 	updateScriptLog "PRE-FLIGHT CHECK: This script must be run as root; exiting."
 	exit 1
-fi
-
-# Create Dialog directory
-if [[ ! -d "/Library/Application Support/Dialog/" ]]; then
-    updateScriptLog "PRE-FLIGHT CHECK: Creating '/Library/Application Support/Dialog/' …"
-    mkdir -p "/Library/Application Support/Dialog/"
-else
-    updateScriptLog "The directory '/Library/Application Support/Dialog/' exists …"
-fi
-
-# Wait for the creation of "${plistTestFile}"
-plistTestFile="/Library/Preferences/com.jamfsoftware.jamf.plist"
-plistTestFileCounter="1"
-secondsToWait="300"
-until [[ -f "${plistTestFile}" ]] || [[ "${plistTestFileCounter}" -gt "${secondsToWait}" ]] ; do
-    updateScriptLog "PRE-FLIGHT CHECK: Testing for '${plistTestFile}'; Counter: ${plistTestFileCounter} of ${secondsToWait}"
-    sleep 1
-    ((plistTestFileCounter++))
-done
-
-# Create Dialog.png from Self Service's custom icon (thanks, @meschwartz!)
-if [[ -f "${plistTestFile}" ]]; then
-	updateScriptLog "Create 'Dialog.png' …"
-	xxd -p -s 260 "$(defaults read /Library/Preferences/com.jamfsoftware.jamf self_service_app_path)"/Icon$'\r'/..namedfork/rsrc | xxd -r -p > "/Library/Application Support/Dialog/Dialog.png"
-else
-	updateScriptLog "The file '${plistTestFile}' was NOT found after waiting ${secondsToWait} seconds"
-fi
-
-# Validate Dialog Branding Image
-updateScriptLog "PRE-FLIGHT CHECK: Validate 'Dialog.png' …"
-if [[ ! -f "/Library/Application Support/Dialog/Dialog.png" ]]; then
-    updateScriptLog "PRE-FLIGHT CHECK: ERROR: The file '/Library/Application Support/Dialog/Dialog.png' was NOT found."
-else
-    updateScriptLog "PRE-FLIGHT CHECK: The file '/Library/Application Support/Dialog/Dialog.png' was created sucessfully."
-    find "/Library/Application Support/Dialog/Dialog.png" | tee -a "${scriptLog}"
 fi
 
 # Check for / install swiftDialog (Thanks big bunches, @acodega!)

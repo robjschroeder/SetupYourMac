@@ -1,14 +1,16 @@
 #!/bin/zsh
 ## postinstall
 
-# Postinstall script for Composer creates the following:
-# - A Launch Daemon that starts a separate script to run a Jamf Pro policy command
+# Postinstall script which creates the following:
+# - A LaunchDaemon that starts a separate script to run a Jamf Pro policy command
 # - A script to wait for Jamf Pro enrollment to complete then triggers Setup Your Mac
 # - A script that is designed to be called by a Jamf Pro policy to unload the Launch Daemon
 # -- and then remove the LaunchDaemon and script
+# - Creates "/Library/Application Support/Dialog/Dialog.png" from Self Service's custom icon (thanks, @meschwartz!) 
 #
 # Created 01.16.2023 @robjschroeder
 # Updated 03.11.2023 @robjschroeder
+# Updated 04.12.2023 @dan-snelson
 
 ##################################################
 
@@ -18,21 +20,21 @@ targetLocation=$2
 targetVolume=$3
 
 # Script Variables
-scriptVersion="1.1.0"
+scriptVersion="1.2.0"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin/
+organizationIdentifier="com.company"
 osVersion=$( sw_vers -productVersion )
 osBuild=$( sw_vers -buildVersion )
 osMajorVersion=$( echo "${osVersion}" | awk -F '.' '{print $1}' )
-organizationIdentifier=xyz.techitout
 tempUtilitiesPath="/usr/local/SYM-enrollment"
 scriptLog="${tempUtilitiesPath}/${organizationIdentifier}.postinstall.log"
 
 # Jamf Pro Policy Trigger
-Trigger=symStart
+Trigger="symStart"
 
 # After Setup Assistant exits, if jamf enrollment isn't complete,
 # this is how many seconds to wait complete before exiting with an error:
-enrollmentTimeout=120
+enrollmentTimeout="120"
 
 # One approach is to use the following locations and files:
 # LaunchDaemon: 
@@ -60,78 +62,95 @@ function updateScriptLog() {
 	echo -e "$( date +%Y-%m-%d\ %H:%M:%S ) - ${1}" | tee -a "${scriptLog}"
 }
 
-updateScriptLog "\n###\n# Prestage Postinstall Script for SYM (${scriptVersion})\n# https://techitout.xyz/\n###\n"
-updateScriptLog "Pre-flight Check: Initiating ..."
+updateScriptLog "\n###\n# PreStage SYM (${scriptVersion})\n# https://techitout.xyz/\n###\n"
+updateScriptLog "PRE-FLIGHT CHECK: Initiating ..."
 
 # This script must be run as root or via Jamf Pro.
 # The resulting Script and LaunchDaemon will be run as root.
 
 if [[ $(id -u) -ne 0 ]]; then
-	updateScriptLog "Pre-flight Check: This script must be run as root; exiting."
+	updateScriptLog "PRE-FLIGHT CHECK: This script must be run as root; exiting."
 	exit 1
 fi
 
-# Check for / install swiftDialog (Thanks big bunches, @acodega!)
+# Create Dialog directory
+if [[ ! -d "/Library/Application Support/Dialog/" ]]; then
+    updateScriptLog "Creating '/Library/Application Support/Dialog/' …"
+    mkdir -p "/Library/Application Support/Dialog/"
+else
+    updateScriptLog "The directory '/Library/Application Support/Dialog/' exists …"
+fi
 
+# Create Dialog.png from Self Service's custom icon (thanks, @meschwartz!)
+updateScriptLog "Create 'Dialog.png' …"
+xxd -p -s 260 "$(defaults read /Library/Preferences/com.jamfsoftware.jamf self_service_app_path)"/Icon$'\r'/..namedfork/rsrc | xxd -r -p > "/Library/Application Support/Dialog/Dialog.png"
+
+# Validate Dialog Branding Image
+updateScriptLog "Validate 'Dialog.png' …"
+if [[ ! -f "/Library/Application Support/Dialog/Dialog.png" ]]; then
+    updateScriptLog "Error: The file '/Library/Application Support/Dialog/Dialog.png' was NOT found."
+else
+    updateScriptLog "The file '/Library/Application Support/Dialog/Dialog.png' was created sucessfully."
+    find "/Library/Application Support/Dialog/Dialog.png" | tee -a "${scriptLog}"
+fi
+
+# Check for / install swiftDialog (Thanks big bunches, @acodega!)
 function dialogCheck() {
-		
-	# Get the URL of the latest PKG From the Dialog GitHub repo
-	dialogURL=$(curl --silent --fail "https://api.github.com/repos/bartreardon/swiftDialog/releases/latest" | awk -F '"' "/browser_download_url/ && /pkg\"/ { print \$4; exit }")
-	
-	# Expected Team ID of the downloaded PKG
-	expectedDialogTeamID="PWA5E9TQ59"
-	
-	# Check for Dialog and install if not found
-	if [ ! -e "/Library/Application Support/Dialog/Dialog.app" ]; then
-		
-		updateScriptLog "Pre-flight Check: Dialog not found. Installing..."
-		
-		# Create temporary working directory
-		workDirectory=$( /usr/bin/basename "$0" )
-		tempDirectory=$( /usr/bin/mktemp -d "/private/tmp/$workDirectory.XXXXXX" )
-		
-		# Download the installer package
-		/usr/bin/curl --location --silent "$dialogURL" -o "$tempDirectory/Dialog.pkg"
-		
-		# Verify the download
-		teamID=$(/usr/sbin/spctl -a -vv -t install "$tempDirectory/Dialog.pkg" 2>&1 | awk '/origin=/ {print $NF }' | tr -d '()')
-		
-		# Install the package if Team ID validates
-		if [[ "$expectedDialogTeamID" == "$teamID" ]]; then
-			
-			/usr/sbin/installer -pkg "$tempDirectory/Dialog.pkg" -target /
-			sleep 2
-			dialogVersion=$( /usr/local/bin/dialog --version )
-			updateScriptLog "Pre-flight Check: swiftDialog version ${dialogVersion} installed; proceeding..."
-			
-		else
-			
-			# Display a so-called "simple" dialog if Team ID fails to validate
-			osascript -e 'display dialog "Please advise your Support Representative of the following error:\r\r• Dialog Team ID verification failed\r\r" with title "Setup Your Mac: Error" buttons {"Close"} with icon caution'
-			completionActionOption="Quit"
-			exitCode="1"
-			quitScript
-			
-		fi
-		
-		# Remove the temporary working directory when done
-		/bin/rm -Rf "$tempDirectory"
-		
-	else
-		
-		updateScriptLog "Pre-flight Check: swiftDialog version $(dialog --version) found; proceeding..."
-		
-	fi
-	
+
+    # Get the URL of the latest PKG From the Dialog GitHub repo
+    dialogURL=$(curl --silent --fail "https://api.github.com/repos/bartreardon/swiftDialog/releases/latest" | awk -F '"' "/browser_download_url/ && /pkg\"/ { print \$4; exit }")
+
+    # Expected Team ID of the downloaded PKG
+    expectedDialogTeamID="PWA5E9TQ59"
+
+    # Check for Dialog and install if not found
+    if [ ! -e "/Library/Application Support/Dialog/Dialog.app" ]; then
+
+        updateScriptLog "PRE-FLIGHT CHECK: Dialog not found. Installing..."
+
+        # Create temporary working directory
+        workDirectory=$( /usr/bin/basename "$0" )
+        tempDirectory=$( /usr/bin/mktemp -d "/private/tmp/$workDirectory.XXXXXX" )
+
+        # Download the installer package
+        /usr/bin/curl --location --silent "$dialogURL" -o "$tempDirectory/Dialog.pkg"
+
+        # Verify the download
+        teamID=$(/usr/sbin/spctl -a -vv -t install "$tempDirectory/Dialog.pkg" 2>&1 | awk '/origin=/ {print $NF }' | tr -d '()')
+
+        # Install the package if Team ID validates
+        if [[ "$expectedDialogTeamID" == "$teamID" ]]; then
+
+            /usr/sbin/installer -pkg "$tempDirectory/Dialog.pkg" -target /
+            sleep 2
+            updateScriptLog "PRE-FLIGHT CHECK: swiftDialog version $(/usr/local/bin/dialog --version) installed; proceeding..."
+
+        else
+
+            # Display a so-called "simple" dialog if Team ID fails to validate
+            osascript -e 'display dialog "Please advise your Support Representative of the following error:\r\r• Dialog Team ID verification failed\r\r" with title "PreStage SYM: Error" buttons {"Close"} with icon caution'
+
+        fi
+
+        # Remove the temporary working directory when done
+        /bin/rm -Rf "$tempDirectory"
+
+    else
+
+        updateScriptLog "PRE-FLIGHT CHECK: swiftDialog version $(/usr/local/bin/dialog --version) found; proceeding..."
+
+    fi
+
 }
 
 if [[ ! -e "/Library/Application Support/Dialog/Dialog.app" ]]; then
-	dialogCheck
+    dialogCheck
+else
+    updateScriptLog "PRE-FLIGHT CHECK: swiftDialog version $(/usr/local/bin/dialog --version) found; proceeding..."
 fi
 
 # Pre-flight Checks Complete
-
-updateScriptLog "Pre-flight Check: Complete"
+updateScriptLog "PRE-FLIGHT CHECK: Complete"
 
 # Script and Launch Daemon/Agent variables
 installerBaseString=${organizationIdentifier}.sym-prestarter
@@ -144,7 +163,7 @@ launchDaemonPath="/Library/LaunchDaemons"/${launchDaemonName}
 
 # The following creates a script that triggers the swiftDialog setup your mac script to start. 
 # Leave a full return at the end of the content before the last "ENDOFINSTALLERSCRIPT" line.
-updateScriptLog "Prestage SYM: Creating ${installerScriptPath}"
+updateScriptLog "PreStage SYM: Creating ${installerScriptPath}"
 
 (
 cat <<ENDOFINSTALLERSCRIPT
@@ -273,11 +292,11 @@ cat <<ENDOFLAUNCHDAEMON
 ENDOFLAUNCHDAEMON
 )  > "${launchDaemonPath}"
 
-updateScriptLog "Prestage SYM: Setting permissions for ${launchDaemonPath}."
+updateScriptLog "PreStage SYM: Setting permissions for ${launchDaemonPath}."
 chmod 644 "${launchDaemonPath}"
 chown root:wheel "${launchDaemonPath}"
 
-updateScriptLog "Prestage SYM: Loading ${launchDaemonName}."
+updateScriptLog "PreStage SYM: Loading ${launchDaemonName}."
 launchctl load "${launchDaemonPath}"
 
 #-----------
@@ -295,7 +314,7 @@ launchctl load "${launchDaemonPath}"
 # In your Setup-Your-Mac-via-Dialog.sh script, include the policy near the end of your policy array.
 #
 # Leave a full return at the end of the content before the last "ENDOFUNINSTALLERSCRIPT" line.
-updateScriptLog "Prestage SYM: Creating ${uninstallerScriptPath}."
+updateScriptLog "PreStage SYM: Creating ${uninstallerScriptPath}."
 (
 cat <<ENDOFUNINSTALLERSCRIPT
 #!/bin/zsh
@@ -317,11 +336,11 @@ rm /var/tmp/${installerScriptName}.out.log
 ENDOFUNINSTALLERSCRIPT
 ) > "${uninstallerScriptPath}"
 
-updateScriptLog "Prestage SYM: Setting permissions for ${uninstallerScriptPath}."
+updateScriptLog "PreStage SYM: Setting permissions for ${uninstallerScriptPath}."
 chmod 777 "${uninstallerScriptPath}"
 chown root:wheel "${uninstallerScriptPath}"
 
-updateScriptLog "Prestage SYM: Complete."
+updateScriptLog "PreStage SYM: Complete."
 
 exit 0		## Success
 exit 1		## Failure

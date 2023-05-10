@@ -37,7 +37,7 @@ Trigger="symStart"
 
 # After Setup Assistant exits, if jamf enrollment isn't complete,
 # this is how many seconds to wait complete before exiting with an error:
-enrollmentTimeout="600"
+enrollmentTimeout="120"
 
 # One approach is to use the following locations and files:
 # LaunchDaemon: 

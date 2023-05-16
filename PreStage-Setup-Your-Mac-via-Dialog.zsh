@@ -14,6 +14,10 @@
 # Updated 05.09.2023 @robjschroeder -- version 1.2.1
 #	- Removed function dialogCheck, will rely on Setup Your Mac to download the latest version of swiftDialog
 #	+ Renamed script for alignment with Setup Your Mac
+# Updated 05.16.2023 @robjschroeder -- version 1.2.2
+#       + Added record of OS version and build to log
+#       + Added extra 'If' to look for touch file in case the jamf.log gets wiped. This is helpful if SYM has a minimum
+#       build requirement before it can complete. 
 
 ##################################################
 
@@ -29,11 +33,10 @@ organizationIdentifier="com.company"
 scriptLog="/var/log/${organizationIdentifier}.log"
 osVersion=$( sw_vers -productVersion )
 osBuild=$( sw_vers -buildVersion )
-osMajorVersion=$( echo "${osVersion}" | awk -F '.' '{print $1}' )
 tempUtilitiesPath="/usr/local/SYM-enrollment"
 
 # Jamf Pro Policy Trigger
-Trigger="symStart"
+Trigger="symStarttest"
 
 # After Setup Assistant exits, if jamf enrollment isn't complete,
 # this is how many seconds to wait complete before exiting with an error:
@@ -76,6 +79,9 @@ if [[ $(id -u) -ne 0 ]]; then
 	exit 1
 fi
 
+# Record OS Information into log
+updateScriptLog "PRE-FLIGHT CHECK: Running macOS $osVersion build $osBuild"
+
 # Pre-flight Checks Complete
 updateScriptLog "PRE-FLIGHT CHECK: Complete"
 
@@ -96,13 +102,19 @@ updateScriptLog "PreStage SYM: Creating ${installerScriptPath}"
 cat <<ENDOFINSTALLERSCRIPT
 #!/bin/zsh
 
+# Check to see if sym-triggered file exists, then proceed calling SYM here
+if [[ -f ${tempUtilitiesPath}/.sym-triggered ]]; then
+	echo "SYM was previously triggered, lets continue..."
+	/usr/local/jamf/bin/jamf policy -event ${Trigger}
+	exit 0
+fi
+
 # First and most simple test: if enrollment is complete, just run the policy.
 # It doesn't matter at that point if someone is logged in or not.
 # Don't try to grep a file if it doesn't yet exist.
-if  [[ -f /var/log/jamf.log ]]; 
-then
-	if \$( /usr/bin/grep -q enrollmentComplete /var/log/jamf.log )
-	then
+if  [[ -f /var/log/jamf.log ]]; then
+	if \$( /usr/bin/grep -q enrollmentComplete /var/log/jamf.log ); then
+		touch ${tempUtilitiesPath}/.sym-triggered
 		/usr/local/jamf/bin/jamf policy -event ${Trigger}
 		exit 0
 	fi
@@ -116,8 +128,7 @@ fi
 # After they make their last Setup Assistant choice,
 # /var/db/.AppleDiagnosticsSetupDone is created.
 #
-until [[ -f /var/db/.AppleDiagnosticsSetupDone ]];
-do
+until [[ -f /var/db/.AppleDiagnosticsSetupDone ]]; do
 	echo "Waiting for someone to complete Setup Assistant."
 	sleep 1
 done
@@ -126,10 +137,9 @@ done
 # That may have given enough time to complete enrollment.
 # Do a quick check to see if enrollment is complete.
 #
-if  [[ -f /var/log/jamf.log ]]; 
-then
-	if \$( /usr/bin/grep -q enrollmentComplete /var/log/jamf.log )
-	then
+if  [[ -f /var/log/jamf.log ]]; then
+	if \$( /usr/bin/grep -q enrollmentComplete /var/log/jamf.log ); then
+		touch ${tempUtilitiesPath}/.sym-triggered
 		/usr/local/jamf/bin/jamf policy -event ${Trigger}
 		exit 0
 	fi
@@ -142,10 +152,8 @@ fi
 # we are logged in as a real user instead of _mbsetutp user.
 
 timeoutCounter=0
-until [[ -f /var/log/jamf.log ]]
-do
-	if [[ \$timeoutCounter -ge $enrollmentTimeout ]];
-	then
+until [[ -f /var/log/jamf.log ]]; do
+	if [[ \$timeoutCounter -ge $enrollmentTimeout ]]; then
 		echo "Gave up waiting for the jamf log to appear."
 		exit 1
 	else
@@ -155,10 +163,8 @@ do
 	fi
 done
 
-until ( /usr/bin/grep -q enrollmentComplete /var/log/jamf.log )
-do
-	if [[ \$timeoutCounter -ge $enrollmentTimeout ]];
-	then
+until ( /usr/bin/grep -q enrollmentComplete /var/log/jamf.log ); do
+	if [[ \$timeoutCounter -ge $enrollmentTimeout ]]; then
 		echo "Gave up waiting for enrollment to complete."
 		exit 1
 	else
@@ -173,6 +179,7 @@ done
 # 2. jamf enrollment is complete
 
 # Run the policy to call the  swiftDialog setup your mac script.
+touch ${tempUtilitiesPath}/.sym-triggered
 /usr/local/jamf/bin/jamf policy -event ${Trigger}
 
 ENDOFINSTALLERSCRIPT
@@ -248,7 +255,6 @@ cat <<ENDOFUNINSTALLERSCRIPT
 # This is meant to be called by a Jamf Pro policy via trigger
 # Near the end of your JSON policy array in your swiftDialog setup your mac script
 
-rm ${tempUtilitiesPath}/${swiftDialogInstallerName}
 rm ${installerScriptPath}
 
 # Note that if you unload the LaunchDaemon this will immediately kill the setup your mac script script

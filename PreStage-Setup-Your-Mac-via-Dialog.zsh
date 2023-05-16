@@ -17,7 +17,7 @@
 # Updated 05.16.2023 @robjschroeder -- version 1.2.2
 #       + Added record of OS version and build to log
 #       + Added extra 'If' to look for touch file in case the jamf.log gets wiped. This is helpful if SYM has a minimum
-#       build requirement before it can complete. 
+#       build requirement before it can complete. (Thanks @drtaru!!)
 
 ##################################################
 

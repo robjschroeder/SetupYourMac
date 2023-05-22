@@ -36,7 +36,7 @@ osBuild=$( sw_vers -buildVersion )
 tempUtilitiesPath="/usr/local/SYM-enrollment"
 
 # Jamf Pro Policy Trigger
-Trigger="symStarttest"
+Trigger="symStart"
 
 # After Setup Assistant exits, if jamf enrollment isn't complete,
 # this is how many seconds to wait complete before exiting with an error:

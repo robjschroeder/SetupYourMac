@@ -27,7 +27,7 @@ targetLocation=$2
 targetVolume=$3
 
 # Script Variables
-scriptVersion="1.2.1"
+scriptVersion="1.2.2"
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin/
 organizationIdentifier="com.company"
 scriptLog="/var/log/${organizationIdentifier}.log"
